@@ -32,30 +32,33 @@ If `CLAUDE.local.md` exists (git-ignored), read it too: it holds the owner's mac
    - Xcode only creates the Apple Development certificate when it is needed. If it is missing, ask the owner to create it: *Xcode > Settings > Accounts*, select the Apple ID, *Manage Certificates...*, then *+ > Apple Development*. Alternatively, `-allowProvisioningUpdates` can create it during the build once the account is in Xcode.
    - Never ask for passwords.
    - codesign may trigger a Keychain prompt. Tell the owner to click **Always Allow**.
-3. Build:
+3. Archive backup and personal notes. Both are git-ignored, so a fresh clone has neither.
+   - If `Fallback/archive.json` is missing, the build has no offline fallback. Tell the owner before building and offer to create it (see `Fallback/README.md`).
+   - If `CLAUDE.local.md` is missing, ask the owner whether they keep a copy elsewhere (for example next to their archive backup) to copy in.
+4. Build:
    ```
    xcodebuild -project ClearQuotes.xcodeproj -scheme ClearQuotes -configuration Release \
      -derivedDataPath build -allowProvisioningUpdates DEVELOPMENT_TEAM=<TEAMID> build
    ```
    - If signing fails because the bundle ID is taken, change `BUNDLE_ID_PREFIX` (default `se.ulfgran`) in `tools/make_xcodeproj.py` and regenerate.
    - Last-resort unsigned build (the widget may then not register): `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`.
-4. Install and launch:
+5. Install and launch:
    ```
    ditto build/Build/Products/Release/ClearQuotes.app /Applications/ClearQuotes.app
    open /Applications/ClearQuotes.app
    ```
    The window should show today's idea.
-5. Verify:
+6. Verify:
    - Check that the extension is registered: `pluginkit -m -v -p com.apple.widgetkit-extension | grep -i clearquotes`.
    - Check click forwarding: `open "clearquotes://open?url=https://jamesclear.com/3-2-1"` should open the browser and the app should quit.
    - Check the signature, which must still be valid when `Fallback/archive.json` is bundled: `codesign --verify --deep --strict /Applications/ClearQuotes.app`.
    - For widget logs, use `log show --last 15m --predicate 'process == "ClearQuotesWidgetExtension"'`.
-6. Avoid duplicate widgets in the gallery by unregistering the build copy:
+7. Avoid duplicate widgets in the gallery by unregistering the build copy:
    ```
    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u build/Build/Products/Release/ClearQuotes.app
    ```
-7. Only the owner can add the widget to the desktop: right-click the desktop, choose *Edit Widgets...*, and search for "James Clear". macOS has no command for this, so ask them and ask what they see.
-8. iPhone: if `~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/` exists, copy `iPhone/James Clear 3-2-1.js` there and it syncs to Scriptable on the owner's iPhone. Adding the widget on the phone is up to them.
+8. Only the owner can add the widget to the desktop: right-click the desktop, choose *Edit Widgets...*, and search for "James Clear". macOS has no command for this, so ask them and ask what they see.
+9. iPhone: if `~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents/` exists, copy `iPhone/James Clear 3-2-1.js` there and it syncs to Scriptable on the owner's iPhone. Adding the widget on the phone is up to them.
 
 ## Rules for changes
 
