@@ -1,0 +1,10 @@
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.DS_Store
+Tests/fixtures/
+Tests/out/
+Claude outputs/
+Fallback/*.json
+*.local.md
