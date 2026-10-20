@@ -104,7 +104,8 @@ await refused.mod.main();
 check(refused.state.alerts[1].title === "Couldn't save the picture" && /Privacy & Security > Photos/.test(refused.state.alerts[1].message), "a refused Photos permission is not explained");
 
 // 9) Every idea in the archive fits both layouts on an iPhone screen: all words drawn, within the
-//    side margins, inside its part of the screen, and the centered layout really centered.
+//    side margins, inside its part of the screen; the centered layout centered top to bottom, and the
+//    Lock Screen layout's lines centered sideways.
 const W = 1179, H = 2556;
 const colors = { bg: "#FBF8F3", text: "#1F1C18", muted: "#8C8478", accent: "#B4632A" };
 const allIdeas = items.map((item) => mod.parseIssue(item)).flatMap((issue) => issue.ideas);
@@ -128,7 +129,10 @@ for (const idea of allIdeas.filter((t) => t.length <= mod.CONFIG.maxChars.extraL
     const last = footer.y + footSize * 1.2;
     const where = `${name}, ${idea.length} chars: "${idea.slice(0, 40)}..."`;
     check(chars(body.map((x) => x.text).join("")) === chars(idea), `${where}: text lost`);
-    check(body.every((x) => x.x === Math.round(W * 0.1) && x.x + x.width <= W - Math.round(W * 0.1) + 0.5), `${where}: text runs into the margin`);
+    const margin = Math.round(W * box.margin);
+    check(body.every((x) => x.x >= margin - 0.5 && x.x + x.width <= W - margin + 0.5), `${where}: text runs into the margin`);
+    if (box.align === "center") check(texts.every((x) => Math.abs(x.x + x.width / 2 - W / 2) < 0.5), `${where}: not centered sideways`);
+    else check(body.every((x) => x.x === margin), `${where}: not left-aligned`);
     check(first >= H * box.top - 0.5 && last <= H * box.bottom + 0.5, `${where}: outside its part of the screen (${Math.round(first)}-${Math.round(last)})`);
     if (name === "center") check(Math.abs((first - H * box.top) - (H * box.bottom - last)) < 2, `${where}: not centered`);
     laidOut++;

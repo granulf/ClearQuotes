@@ -670,15 +670,19 @@ function buildWidget(quote, family, error) {
 // ----------------------- saving an idea as a picture -----------------------
 // The picture has the screen's exact resolution and the widget's look. It is drawn on an HTML canvas
 // in an off-screen web view, which can measure text. "center" puts the idea in the middle;
-// "lockscreen" puts it lower, below the Lock Screen clock and above the flashlight and camera buttons.
+// "lockscreen" puts it lower, below the Lock Screen clock (which can be tall) and the widgets under
+// it, and above the flashlight and camera buttons. Its lines are centered under the clock, with wide
+// margins, because iOS often zooms in a little and frames a wallpaper around its "subject".
 
 const IMAGE_COLORS = {
   light: { bg: "#FBF8F3", text: "#1F1C18", muted: "#8C8478", accent: "#B4632A" },
   dark: { bg: "#1C1A17", text: "#F1ECE4", muted: "#9A9286", accent: "#E3A35F" },
 };
+// top, bottom: share of the screen height the idea may use; margin: share of the width on each side;
+// maxSize: largest text size as a share of the width.
 const IMAGE_LAYOUTS = {
-  center: { top: 0.12, bottom: 0.88 }, // share of the screen height the idea may use
-  lockscreen: { top: 0.4, bottom: 0.86 },
+  center: { top: 0.12, bottom: 0.88, margin: 0.1, align: "left", maxSize: 0.07 },
+  lockscreen: { top: 0.5, bottom: 0.83, margin: 0.15, align: "center", maxSize: 0.06 },
 };
 
 // The whole idea: the widget's text can be shortened to fit its size.
@@ -690,7 +694,7 @@ function fullIdeaText(engine, quote) {
 }
 
 // Runs inside the web view (its source is copied there): draws the picture, returns a base64 PNG.
-// d: {width, height, top, bottom, colors, text, footer}
+// d: {width, height, colors, text, footer} plus one of IMAGE_LAYOUTS
 function renderIdea(d) {
   const canvas = document.createElement("canvas");
   canvas.width = d.width;
@@ -698,7 +702,7 @@ function renderIdea(d) {
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = d.colors.bg;
   ctx.fillRect(0, 0, d.width, d.height);
-  const left = Math.round(d.width * 0.1);
+  const left = Math.round(d.width * d.margin);
   const boxWidth = d.width - 2 * left;
   const top = d.height * d.top;
   const room = d.height * d.bottom - top;
@@ -723,27 +727,28 @@ function renderIdea(d) {
   const height = (size, lines) =>
     size * 1.8 + lines.reduce((sum, l) => sum + (l === null ? size * 0.6 : size * 1.38), 0) + size * 0.9 + footSize * 1.2;
   const tooWide = (lines) => lines.some((l) => l !== null && ctx.measureText(l).width > boxWidth);
-  // The largest text size (up to 7% of the width) that fits.
-  let size = Math.round(d.width * 0.07);
+  // The largest text size (up to maxSize of the width) that fits.
+  let size = Math.round(d.width * d.maxSize);
   let lines = wrap(size);
-  while (size > Math.round(d.width * 0.025) && (height(size, lines) > room || tooWide(lines))) lines = wrap(--size);
+  while (size > Math.round(d.width * 0.02) && (height(size, lines) > room || tooWide(lines))) lines = wrap(--size);
   let y = top + Math.max(0, (room - height(size, lines)) / 2);
   ctx.textBaseline = "top";
   ctx.fillStyle = d.colors.accent;
   ctx.font = "bold " + Math.round(size * 2.2) + "px Georgia";
-  ctx.fillText("\u201C", left - size * 0.08, y - size * 0.15);
+  const xFor = (text, nudge) => (d.align === "center" ? (d.width - ctx.measureText(text).width) / 2 : left - nudge);
+  ctx.fillText("\u201C", xFor("\u201C", size * 0.08), y - size * 0.15);
   y += size * 1.8;
   ctx.fillStyle = d.colors.text;
   ctx.font = size + "px Georgia";
   for (const l of lines) {
     if (l === null) { y += size * 0.6; continue; }
-    ctx.fillText(l, left, y + size * 0.19);
+    ctx.fillText(l, xFor(l, 0), y + size * 0.19);
     y += size * 1.38;
   }
   y += size * 0.9;
   ctx.fillStyle = d.colors.muted;
   ctx.font = "600 " + footSize + "px -apple-system, system-ui, Helvetica, sans-serif";
-  ctx.fillText(d.footer, left, y);
+  ctx.fillText(d.footer, xFor(d.footer, 0), y);
   return canvas.toDataURL("image/png").split(",")[1];
 }
 
