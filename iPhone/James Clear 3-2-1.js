@@ -15,7 +15,8 @@
  * Setup: paste this file into a new Scriptable script, add a Scriptable widget
  * to the home or lock screen, long-press it > Edit Widget > Script: this one.
  * Tapping the widget (or running the script inside Scriptable) shows a menu:
- * another idea, open the issue on jamesclear.com, copy, preview, reset.
+ * another idea, open the issue on jamesclear.com, save the idea as a picture
+ * (centered, or placed for the Lock Screen), copy, preview, reset.
  * After "Another idea" the widget shows the new idea at its next refresh
  * (within about an hour); the next day starts fresh.
  *
@@ -666,19 +667,123 @@ function buildWidget(quote, family, error) {
   return w;
 }
 
+// ----------------------- saving an idea as a picture -----------------------
+// The picture has the screen's exact resolution and the widget's look. It is drawn on an HTML canvas
+// in an off-screen web view, which can measure text. "center" puts the idea in the middle;
+// "lockscreen" puts it lower, below the Lock Screen clock and above the flashlight and camera buttons.
+
+const IMAGE_COLORS = {
+  light: { bg: "#FBF8F3", text: "#1F1C18", muted: "#8C8478", accent: "#B4632A" },
+  dark: { bg: "#1C1A17", text: "#F1ECE4", muted: "#9A9286", accent: "#E3A35F" },
+};
+const IMAGE_LAYOUTS = {
+  center: { top: 0.12, bottom: 0.88 }, // share of the screen height the idea may use
+  lockscreen: { top: 0.4, bottom: 0.86 },
+};
+
+// The whole idea: the widget's text can be shortened to fit its size.
+function fullIdeaText(engine, quote) {
+  const meta = engine.cache.meta;
+  const issues = Object.values(engine.cache.issues).concat(meta && meta.latest ? [meta.latest] : []);
+  const issue = issues.find((x) => x && x.id === quote.issue.id && x.ideas && x.ideas[quote.ideaNumber - 1]);
+  return issue ? issue.ideas[quote.ideaNumber - 1] : quote.text;
+}
+
+// Runs inside the web view (its source is copied there): draws the picture, returns a base64 PNG.
+// d: {width, height, top, bottom, colors, text, footer}
+function renderIdea(d) {
+  const canvas = document.createElement("canvas");
+  canvas.width = d.width;
+  canvas.height = d.height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = d.colors.bg;
+  ctx.fillRect(0, 0, d.width, d.height);
+  const left = Math.round(d.width * 0.1);
+  const boxWidth = d.width - 2 * left;
+  const top = d.height * d.top;
+  const room = d.height * d.bottom - top;
+  const footSize = Math.round(d.width * 0.026);
+  // Lines break at spaces, and after dashes inside words such as "disappointment\u2014undeterred".
+  const wrap = (size) => {
+    ctx.font = size + "px Georgia";
+    const lines = [];
+    for (const para of d.text.split("\n")) {
+      if (!para.trim()) { lines.push(null); continue; } // the gap between paragraphs
+      let line = "";
+      for (const word of para.split(" ")) {
+        word.replace(/([\u2014\u2013])/g, "$1\n").split("\n").filter(Boolean).forEach((piece, i) => {
+          const next = line ? line + (i === 0 ? " " : "") + piece : piece;
+          if (line && ctx.measureText(next).width > boxWidth) { lines.push(line); line = piece; } else line = next;
+        });
+      }
+      lines.push(line);
+    }
+    return lines;
+  };
+  const height = (size, lines) =>
+    size * 1.8 + lines.reduce((sum, l) => sum + (l === null ? size * 0.6 : size * 1.38), 0) + size * 0.9 + footSize * 1.2;
+  const tooWide = (lines) => lines.some((l) => l !== null && ctx.measureText(l).width > boxWidth);
+  // The largest text size (up to 7% of the width) that fits.
+  let size = Math.round(d.width * 0.07);
+  let lines = wrap(size);
+  while (size > Math.round(d.width * 0.025) && (height(size, lines) > room || tooWide(lines))) lines = wrap(--size);
+  let y = top + Math.max(0, (room - height(size, lines)) / 2);
+  ctx.textBaseline = "top";
+  ctx.fillStyle = d.colors.accent;
+  ctx.font = "bold " + Math.round(size * 2.2) + "px Georgia";
+  ctx.fillText("\u201C", left - size * 0.08, y - size * 0.15);
+  y += size * 1.8;
+  ctx.fillStyle = d.colors.text;
+  ctx.font = size + "px Georgia";
+  for (const l of lines) {
+    if (l === null) { y += size * 0.6; continue; }
+    ctx.fillText(l, left, y + size * 0.19);
+    y += size * 1.38;
+  }
+  y += size * 0.9;
+  ctx.fillStyle = d.colors.muted;
+  ctx.font = "600 " + footSize + "px -apple-system, system-ui, Helvetica, sans-serif";
+  ctx.fillText(d.footer, left, y);
+  return canvas.toDataURL("image/png").split(",")[1];
+}
+
+// Saves the idea to Photos as a picture of the screen's size. Returns what to tell the user.
+async function saveIdeaImage(engine, quote, layout) {
+  try {
+    const res = Device.screenResolution();
+    const data = Object.assign({
+      width: Math.round(Math.min(res.width, res.height)),
+      height: Math.round(Math.max(res.width, res.height)),
+      colors: IMAGE_COLORS[Device.isUsingDarkAppearance() ? "dark" : "light"],
+      text: fullIdeaText(engine, quote),
+      footer: `JAMES CLEAR \u00B7 3-2-1 \u00B7 ${prettyDate(quote.issue.date).toUpperCase()}`,
+    }, IMAGE_LAYOUTS[layout]);
+    const wv = new WebView();
+    await wv.loadHTML(`<html><body><script>${renderIdea.toString()}</script></body></html>`);
+    const png = await wv.evaluateJavaScript(`renderIdea(${JSON.stringify(data)})`);
+    Photos.save(Image.fromData(Data.fromBase64String(png)));
+    return { title: "Saved to Photos" };
+  } catch (e) {
+    return { title: "Couldn't save the picture", note: "Check that Scriptable may add photos: Settings > Privacy & Security > Photos." };
+  }
+}
+
 // The in-app menu, for the widget size that was tapped. "Another idea" and "Previous idea"
-// show that pick and open the menu again, until one sticks.
+// show that pick and open the menu again, until one sticks; so does saving a picture.
 async function presentInApp(engine, family) {
   const fresh = async (fam) => {
     try { return await engine.quoteFor(new Date(), fam); } catch (e) { return null; }
   };
+  let notice = null; // shown once, after saving a picture
   for (;;) {
     const quote = await fresh(family);
     const shuffled = engine.skipCount(dayKey(new Date())) > 0;
     const a = new Alert();
-    a.title = quote ? `Today's idea (${prettyDate(quote.issue.date)})` : "James Clear 3-2-1";
+    a.title = notice ? notice.title : quote ? `Today's idea (${prettyDate(quote.issue.date)})` : "James Clear 3-2-1";
     a.message = quote ? quote.text : "Couldn't load an idea. Check your connection and try again.";
     if (quote && shuffled) a.message += "\n\nThe widget shows this idea at its next refresh.";
+    if (notice && notice.note) a.message += `\n\n${notice.note}`;
+    notice = null;
     // Each action returns true to show the menu again.
     const actions = [];
     const add = (label, run, destructive) => {
@@ -689,6 +794,10 @@ async function presentInApp(engine, family) {
     add("Another idea", () => { engine.nextIdea(new Date()); return true; });
     if (shuffled) add("Previous idea", () => { engine.previousIdea(new Date()); return true; });
     add("Open this issue", () => { if (quote) Safari.open(quote.issue.link); });
+    if (quote) {
+      add("Save as image", async () => { notice = await saveIdeaImage(engine, quote, "center"); return true; });
+      add("Save as Lock Screen image", async () => { notice = await saveIdeaImage(engine, quote, "lockscreen"); return true; });
+    }
     add("Copy idea", () => { if (quote) Pasteboard.copy(`${quote.text}\n\n\u2014 James Clear, 3-2-1 (${quote.issue.link})`); });
     add("Preview small", async () => { await buildWidget(await fresh("small"), "small").presentSmall(); });
     add("Preview medium", async () => { await buildWidget(await fresh("medium"), "medium").presentMedium(); });

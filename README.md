@@ -12,6 +12,7 @@ One idea a day from James Clear's *3-2-1* newsletter, on your Mac desktop and yo
 - **Another idea:** not feeling today's idea? Swap it until one resonates, and go back if the earlier one was better. The choice stays until midnight, and the next day starts fresh. Swaps are per device, so after one the Mac and the iPhone can differ until the next day.
 - **Mac:** click the widget to open that issue on jamesclear.com, or click the small arrows in the top-right corner for another idea. After a swap, a ‹ button next to them goes back.
 - **iPhone:** tap the widget for a menu with *Another idea* (and *Previous idea* after a swap) and *Open this issue*. The widget shows a swapped idea at its next refresh (within about an hour).
+- **Keep an idea as a picture (iPhone):** *Save as image* puts the idea, in the widget's style, on a picture the size of your screen and saves it to Photos. *Save as Lock Screen image* places it lower, below the clock, for use as a Lock Screen wallpaper.
 - **Offline:** shows a cached idea and tries again later. With an optional personal archive backup (see [`Fallback/README.md`](Fallback/README.md)), it keeps showing the usual daily idea even if the site is down or gone.
 
 ## How it works
@@ -41,7 +42,7 @@ One idea a day from James Clear's *3-2-1* newsletter, on your Mac desktop and yo
 2. Add the script in one of two ways:
    - Save `iPhone/James Clear 3-2-1.js` to *iCloud Drive > Scriptable*. It appears in the app.
    - Or in Scriptable tap **+**, paste the file's contents, and name the script *James Clear 3-2-1*.
-3. Run it once inside Scriptable. You'll get a menu with *Another idea*, *Previous idea* (after a swap), *Open this issue*, *Copy idea*, previews and *Reset cache*. Tapping the widget opens the same menu.
+3. Run it once inside Scriptable. You'll get a menu with *Another idea*, *Previous idea* (after a swap), *Open this issue*, *Save as image*, *Save as Lock Screen image*, *Copy idea*, previews and *Reset cache*. Tapping the widget opens the same menu. The first save asks for permission to add photos.
 4. **Home Screen:** long-press, tap **Edit > Add Widget > Scriptable**, choose a size and add it. Then long-press the widget, choose **Edit Widget**, and set **Script** to *James Clear 3-2-1*.
 5. **Lock Screen (optional):** customize the Lock Screen, add a Scriptable widget (rectangular or inline), and pick the same script.
 
@@ -62,7 +63,7 @@ Keep both files in sync if you change a setting, so the two devices keep matchin
 
 ## Tests
 
-`Tests/run_tests.sh` needs Node 18+ and Xcode's `swiftc`. It downloads the archive once into `Tests/fixtures/` (4-5 requests, git-ignored) and then runs offline: the parser, the daily picks, "Another idea" and back, the archive fallback and the iPhone menu, and a check that the Swift and JavaScript engines agree on every pick.
+`Tests/run_tests.sh` needs Node 18+ and Xcode's `swiftc`. It downloads the archive once into `Tests/fixtures/` (4-5 requests, git-ignored) and then runs offline: the parser, the daily picks, "Another idea" and back, the archive fallback, the iPhone menu and its pictures (every idea in the archive must fit both layouts), and a check that the Swift and JavaScript engines agree on every pick.
 
 ## Files
 

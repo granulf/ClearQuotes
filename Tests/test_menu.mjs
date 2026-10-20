@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadScript, loadFixtureItems, fixtureHTTP, frozenIndex } from "./harness.mjs";
+import { loadScript, loadFixtureItems, fixtureHTTP, frozenIndex, makeFakeDocument } from "./harness.mjs";
 
 const items = loadFixtureItems();
 const http = fixtureHTTP(items, { latestIndex: frozenIndex(items) });
@@ -82,6 +82,59 @@ const live = await loadScript({ httpImpl: http, cacheDir: liveCache, icloud: { d
 await live.mod.main();
 const saved = JSON.parse(fs.readFileSync(path.join(liveCache, "jamesclear-321", "cache.json"), "utf8"));
 check(saved.additions.length === 1 && saved.additions[0].id === posts.at(-1).id, "the newest post was not added to the iPhone's backup");
+
+// 8) Saving the idea as a picture, from the menu: both layouts go to Photos at the screen's
+//    resolution, the menu comes back with a notice, and a refused Photos permission is explained.
+const pics = await runMenu("large", ["Save as image", "Save as Lock Screen image", -1]);
+check(pics.state.alerts[0].actions.includes("Save as image") && pics.state.alerts[0].actions.includes("Save as Lock Screen image"), "the save actions are missing");
+check(pics.state.saved.length === 2 && pics.state.saved.every((img) => img.image.base64 === "UE5H"), "the pictures did not reach Photos");
+check(pics.state.alerts[1].title === "Saved to Photos" && pics.state.alerts[2].title === "Saved to Photos", "no notice after saving");
+check(/^Today's idea/.test(pics.state.alerts[0].title), "the notice should only follow a save");
+const bg = pics.state.drawn.find((x) => x.op === "rect");
+check(bg && bg.w === 1179 && bg.h === 2556 && bg.color === "#FBF8F3", "the picture is not screen-sized in the light colors");
+const chars = (t) => t.replace(/\s+/g, ""); // lines may break after dashes, so compare without spaces
+const savedText = pics.state.drawn.filter((x) => x.op === "text" && /^\d+px Georgia/.test(x.font)).map((x) => x.text).join("");
+check(chars(savedText) === chars(pics.state.alerts[2].message.split("\n\nThe widget")[0]), "the picture's text differs from the idea");
+const dark = await loadScript({ httpImpl: http, cacheDir, alertChoices: ["Save as image", -1], args: { queryParameters: { family: "medium" } }, device: { dark: true, width: 2556, height: 1179 } });
+await dark.mod.main();
+const darkBg = dark.state.drawn.find((x) => x.op === "rect");
+check(darkBg && darkBg.color === "#1C1A17" && darkBg.w === 1179 && darkBg.h === 2556, "dark mode or a sideways screen is not handled");
+const refused = await loadScript({ httpImpl: http, cacheDir, alertChoices: ["Save as image", -1], args: { queryParameters: { family: "small" } }, device: { photosFail: true } });
+await refused.mod.main();
+check(refused.state.alerts[1].title === "Couldn't save the picture" && /Privacy & Security > Photos/.test(refused.state.alerts[1].message), "a refused Photos permission is not explained");
+
+// 9) Every idea in the archive fits both layouts on an iPhone screen: all words drawn, within the
+//    side margins, inside its part of the screen, and the centered layout really centered.
+const W = 1179, H = 2556;
+const colors = { bg: "#FBF8F3", text: "#1F1C18", muted: "#8C8478", accent: "#B4632A" };
+const allIdeas = items.map((item) => mod.parseIssue(item)).flatMap((issue) => issue.ideas);
+let laidOut = 0;
+let smallest = Infinity;
+for (const idea of allIdeas.filter((t) => t.length <= mod.CONFIG.maxChars.extraLarge)) {
+  for (const name of ["center", "lockscreen"]) {
+    const drawn = [];
+    globalThis.document = makeFakeDocument(drawn);
+    const box = mod.IMAGE_LAYOUTS[name];
+    mod.renderIdea(Object.assign({ width: W, height: H, colors, text: idea, footer: "JAMES CLEAR \u00B7 3-2-1 \u00B7 OCT 8, 2026" }, box));
+    delete globalThis.document;
+    const texts = drawn.filter((x) => x.op === "text");
+    const body = texts.filter((x) => /^\d+px Georgia/.test(x.font));
+    const size = Number(/^(\d+)px/.exec(body[0].font)[1]);
+    smallest = Math.min(smallest, size);
+    const mark = texts[0];
+    const footer = texts[texts.length - 1];
+    const footSize = Number(/(\d+)px/.exec(footer.font)[1]);
+    const first = mark.y + size * 0.15;
+    const last = footer.y + footSize * 1.2;
+    const where = `${name}, ${idea.length} chars: "${idea.slice(0, 40)}..."`;
+    check(chars(body.map((x) => x.text).join("")) === chars(idea), `${where}: text lost`);
+    check(body.every((x) => x.x === Math.round(W * 0.1) && x.x + x.width <= W - Math.round(W * 0.1) + 0.5), `${where}: text runs into the margin`);
+    check(first >= H * box.top - 0.5 && last <= H * box.bottom + 0.5, `${where}: outside its part of the screen (${Math.round(first)}-${Math.round(last)})`);
+    if (name === "center") check(Math.abs((first - H * box.top) - (H * box.bottom - last)) < 2, `${where}: not centered`);
+    laidOut++;
+  }
+}
+console.log(`pictures: ${laidOut} layouts checked, smallest text ${smallest}px of ${W} (${(smallest / 3).toFixed(1)} pt)`);
 
 if (failures.length) {
   console.log(`MENU FAILURES (${failures.length}):\n  ` + failures.join("\n  "));

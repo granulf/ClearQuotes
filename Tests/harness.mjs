@@ -75,18 +75,38 @@ export function makeRequestClass(httpImpl, log) {
   };
 }
 
+// A canvas that records what is drawn. Text is measured as 0.5 x font size per character.
+export function makeFakeDocument(drawn) {
+  return {
+    createElement: () => {
+      const canvas = { width: 0, height: 0 };
+      const ctx = {
+        font: "10px serif", fillStyle: "#000", textBaseline: "alphabetic",
+        fillRect: (x, y, w, h) => drawn.push({ op: "rect", x, y, w, h, color: ctx.fillStyle }),
+        measureText: (t) => ({ width: t.length * 0.5 * Number(/([0-9.]+)px/.exec(ctx.font)[1]) }),
+        fillText: (text, x, y) => drawn.push({ op: "text", text, x, y, font: ctx.font, color: ctx.fillStyle, width: ctx.measureText(text).width }),
+      };
+      canvas.getContext = () => ctx;
+      canvas.toDataURL = () => "data:image/png;base64,UE5H";
+      drawn.canvas = canvas;
+      return canvas;
+    },
+  };
+}
+
 // alertChoices: what the in-app menu answers, in order (action labels or indexes; then "Done"); args: Scriptable's args.
-export async function loadScript({ httpImpl, cacheDir, config = {}, test = true, log = [], alertChoices = [], args = {}, icloud = {} }) {
+// device: { width, height, dark, photosFail } for the screen, the appearance and Photos.
+export async function loadScript({ httpImpl, cacheDir, config = {}, test = true, log = [], alertChoices = [], args = {}, icloud = {}, device = {} }) {
   const code = fs.readFileSync(SCRIPT_PATH, "utf8");
-  const exportsLine = "\nreturn { CONFIG, decodeEntities, htmlToParagraphs, extractIdeas, parseIssue, fnv1a32, epochDay, dayKey, truncate, prettyDate, QuoteEngine, buildWidget, main, scriptableStore, scriptableHTTP, LATEST_URL, offsetURL, TAP_OPENS_MENU, archiveHTTP, ARCHIVE_FILE };";
+  const exportsLine = "\nreturn { CONFIG, decodeEntities, htmlToParagraphs, extractIdeas, parseIssue, fnv1a32, epochDay, dayKey, truncate, prettyDate, QuoteEngine, buildWidget, main, scriptableStore, scriptableHTTP, LATEST_URL, offsetURL, TAP_OPENS_MENU, archiveHTTP, ARCHIVE_FILE, renderIdea, IMAGE_LAYOUTS };";
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const state = { widget: null, completed: false, shortcutOutput: null, alerts: [], opened: [] };
+  const state = { widget: null, completed: false, shortcutOutput: null, alerts: [], opened: [], saved: [], drawn: [] };
   const Script = {
     setWidget: (w) => { state.widget = w; },
     complete: () => { state.completed = true; },
     setShortcutOutput: (o) => { state.shortcutOutput = o; },
   };
-  const names = ["Request", "FileManager", "ListWidget", "Color", "Font", "Script", "config", "args", "Alert", "Safari", "Pasteboard", "URLScheme"];
+  const names = ["Request", "FileManager", "ListWidget", "Color", "Font", "Script", "config", "args", "Alert", "Safari", "Pasteboard", "URLScheme", "WebView", "Device", "Photos", "Image", "Data"];
   const values = [
     makeRequestClass(httpImpl, log),
     makeFileManager(cacheDir || fs.mkdtempSync(path.join(os.tmpdir(), "jc-")), icloud),
@@ -106,6 +126,21 @@ export async function loadScript({ httpImpl, cacheDir, config = {}, test = true,
     },
     { open(url) { state.opened.push(url); } }, { copy() {} },
     { forRunningScript: () => "scriptable:///run/James%20Clear%203-2-1" },
+    class MockWebView {
+      async loadHTML(html) { this.html = html; }
+      async evaluateJavaScript(js) {
+        const src = /<script>([\s\S]*)<\/script>/.exec(this.html)[1];
+        state.drawn = [];
+        return new Function("document", `${src}\nreturn ${js};`)(makeFakeDocument(state.drawn));
+      }
+    },
+    {
+      screenResolution: () => ({ width: device.width || 1179, height: device.height || 2556 }),
+      isUsingDarkAppearance: () => !!device.dark,
+    },
+    { save: (image) => { if (device.photosFail) throw new Error("denied"); state.saved.push(image); } },
+    { fromData: (data) => ({ image: data }) },
+    { fromBase64String: (b64) => ({ base64: b64 }) },
   ];
   const body = test ? code + exportsLine : code;
   const fn = new AsyncFunction(...names, ...(test ? ["__TEST__"] : []), body);
