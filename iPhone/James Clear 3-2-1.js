@@ -670,19 +670,20 @@ function buildWidget(quote, family, error) {
 // ----------------------- saving an idea as a picture -----------------------
 // The picture has the screen's exact resolution and the widget's look. It is drawn on an HTML canvas
 // in an off-screen web view, which can measure text. "center" puts the idea in the middle;
-// "lockscreen" puts it lower, below the Lock Screen clock (which can be tall) and the widgets under
-// it, and above the flashlight and camera buttons. Its lines are centered under the clock, with wide
-// margins, because iOS often zooms in a little and frames a wallpaper around its "subject".
+// "lockscreen" puts it lower, centered between the widgets under the Lock Screen clock (standard
+// size) and the flashlight and camera buttons. If iOS zooms in when the picture is set as the
+// wallpaper, pinch out: the picture has the screen's exact size.
 
 const IMAGE_COLORS = {
   light: { bg: "#FBF8F3", text: "#1F1C18", muted: "#8C8478", accent: "#B4632A" },
   dark: { bg: "#1C1A17", text: "#F1ECE4", muted: "#9A9286", accent: "#E3A35F" },
 };
 // top, bottom: share of the screen height the idea may use; margin: share of the width on each side;
-// maxSize: largest text size as a share of the width.
+// maxSize: largest text size as a share of the width. The Lock Screen gaps were measured on an
+// iPhone 13: widgets end at 34% of the height, the flashlight button starts at 87%.
 const IMAGE_LAYOUTS = {
   center: { top: 0.12, bottom: 0.88, margin: 0.1, align: "left", maxSize: 0.07 },
-  lockscreen: { top: 0.5, bottom: 0.83, margin: 0.15, align: "center", maxSize: 0.06 },
+  lockscreen: { top: 0.3735, bottom: 0.8335, margin: 0.1, align: "left", maxSize: 0.07 },
 };
 
 // The whole idea: the widget's text can be shortened to fit its size.
