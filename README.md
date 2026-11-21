@@ -11,7 +11,7 @@ One idea a day from James Clear's *3-2-1* newsletter, on your Mac desktop and yo
 - **Same idea everywhere:** the Mac and the iPhone pick the same idea on the same day for the same widget size. Smaller widgets only pick ideas that fit.
 - **Another idea:** not feeling today's idea? Swap it until one resonates, and go back if the earlier one was better. The choice stays until midnight, and the next day starts fresh. Swaps are per device, so after one the Mac and the iPhone can differ until the next day.
 - **Mac:** click the widget to open that issue on jamesclear.com, or click the small arrows in the top-right corner for another idea. After a swap, a ‹ button next to them goes back.
-- **iPhone:** tap the widget for a menu with *Another idea* (and *Previous idea* after a swap) and *Open this issue*. The widget shows a swapped idea at its next refresh (within about an hour).
+- **iPhone:** tap the widget for a menu with *Another idea* (and *Previous idea* after a swap) and *Open this issue*. After a swap, tap *Done* and the widget shows the new idea right away. On iPad the menu is a dialog, so *Done* is there too.
 - **Keep an idea as a picture (iPhone):** *Save as image* puts the idea, in the widget's style, on a picture the size of your screen and saves it to Photos. *Save as Lock Screen image* places it lower, below the clock, for use as a Lock Screen wallpaper.
 - **Offline:** shows a cached idea and tries again later. With an optional personal archive backup (see [`Fallback/README.md`](Fallback/README.md)), it keeps showing the usual daily idea even if the site is down or gone.
 

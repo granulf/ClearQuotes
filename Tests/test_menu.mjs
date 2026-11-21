@@ -31,14 +31,14 @@ check(before.url === "scriptable:///run/James%20Clear%203-2-1?family=small", `wi
 // 2) The menu shows the tapped widget's idea; "Another idea" twice shows two new ones,
 //    "Previous idea" goes back one; then "Done".
 const { mod, state } = await runMenu("small", ["Another idea", "Another idea", "Previous idea", -1]);
-const shown = state.alerts.map((a) => a.message.split("\n\nThe widget")[0]);
+const shown = state.alerts.map((a) => a.message.split("\n\nTap Done")[0]);
 check(state.alerts.length === 4, `expected 4 menus, got ${state.alerts.length}`);
 check(state.alerts[0].actions[0] === "Another idea" && state.alerts[0].actions.includes("Open this issue"), "menu actions are missing");
 check(!state.alerts[0].actions.includes("Previous idea") && state.alerts[1].actions[1] === "Previous idea", "\"Previous idea\" should show only after a swap");
 check(shown[0] === bodyText(before), "the menu did not open on the widget's idea");
 check(new Set(shown.slice(0, 3)).size === 3, "\"Another idea\" did not show a new idea each time");
 check(shown[3] === shown[1], "\"Previous idea\" did not go back to the idea before");
-check(!/next refresh/.test(state.alerts[0].message) && /next refresh/.test(state.alerts[1].message), "the next-refresh hint is wrong");
+check(!/Tap Done/.test(state.alerts[0].message) && /Tap Done to show this idea/.test(state.alerts[1].message), "the Done hint is wrong");
 check(shown.every((t) => t.length <= mod.CONFIG.maxChars.small), "menu ideas are not small-widget sized");
 
 // 3) The widget then shows the idea picked last in the menu.
@@ -94,7 +94,7 @@ const bg = pics.state.drawn.find((x) => x.op === "rect");
 check(bg && bg.w === 1179 && bg.h === 2556 && bg.color === "#FBF8F3", "the picture is not screen-sized in the light colors");
 const chars = (t) => t.replace(/\s+/g, ""); // lines may break after dashes, so compare without spaces
 const savedText = pics.state.drawn.filter((x) => x.op === "text" && /^\d+px Georgia/.test(x.font)).map((x) => x.text).join("");
-check(chars(savedText) === chars(pics.state.alerts[2].message.split("\n\nThe widget")[0]), "the picture's text differs from the idea");
+check(chars(savedText) === chars(pics.state.alerts[2].message.split("\n\nTap Done")[0]), "the picture's text differs from the idea");
 const dark = await loadScript({ httpImpl: http, cacheDir, alertChoices: ["Save as image", -1], args: { queryParameters: { family: "medium" } }, device: { dark: true, width: 2556, height: 1179 } });
 await dark.mod.main();
 const darkBg = dark.state.drawn.find((x) => x.op === "rect");
@@ -139,6 +139,24 @@ for (const idea of allIdeas.filter((t) => t.length <= mod.CONFIG.maxChars.extraL
   }
 }
 console.log(`pictures: ${laidOut} layouts checked, smallest text ${smallest}px of ${W} (${(smallest / 3).toFixed(1)} pt)`);
+
+// 10) iPad: the menu is an alert, which keeps its "Done" button (a sheet would become a popover
+//     without one). "Another idea", then "Done", ends the script and the widget shows the new idea.
+const padCache = fs.mkdtempSync(path.join(os.tmpdir(), "jc-pad-"));
+const padRun = async (opts) => {
+  const run = await loadScript(Object.assign({ httpImpl: http, cacheDir: padCache }, opts));
+  await run.mod.main();
+  return run.state;
+};
+const padBefore = await padRun({ config: { runsInWidget: true, widgetFamily: "large" } });
+const padMenu = await padRun({ alertChoices: ["Another idea", -1], args: { queryParameters: { family: "large" } }, device: { pad: true } });
+check(padMenu.alerts.length === 2 && padMenu.alerts.every((a) => a.style === "alert" && a.cancel === "Done"), "on iPad the menu should be an alert with Done");
+check(padMenu.completed, "Done on iPad did not end the script");
+const padAfter = await padRun({ config: { runsInWidget: true, widgetFamily: "large" } });
+check(bodyText(padAfter.widget) !== bodyText(padBefore.widget) && bodyText(padAfter.widget) === padMenu.alerts[1].message.split("\n\nTap Done")[0],
+  "the iPad widget did not get the new idea");
+const phoneMenu = await padRun({ alertChoices: [-1], args: { queryParameters: { family: "large" } } });
+check(phoneMenu.alerts[0].style === "sheet" && phoneMenu.alerts[0].cancel === "Done", "on iPhone the menu should stay a sheet with Done");
 
 if (failures.length) {
   console.log(`MENU FAILURES (${failures.length}):\n  ` + failures.join("\n  "));

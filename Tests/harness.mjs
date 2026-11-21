@@ -95,7 +95,7 @@ export function makeFakeDocument(drawn) {
 }
 
 // alertChoices: what the in-app menu answers, in order (action labels or indexes; then "Done"); args: Scriptable's args.
-// device: { width, height, dark, photosFail } for the screen, the appearance and Photos.
+// device: { width, height, dark, pad, photosFail } for the screen, the appearance, iPad and Photos.
 export async function loadScript({ httpImpl, cacheDir, config = {}, test = true, log = [], alertChoices = [], args = {}, icloud = {}, device = {} }) {
   const code = fs.readFileSync(SCRIPT_PATH, "utf8");
   const exportsLine = "\nreturn { CONFIG, decodeEntities, htmlToParagraphs, extractIdeas, parseIssue, fnv1a32, epochDay, dayKey, truncate, prettyDate, QuoteEngine, buildWidget, main, scriptableStore, scriptableHTTP, LATEST_URL, offsetURL, TAP_OPENS_MENU, archiveHTTP, ARCHIVE_FILE, renderIdea, IMAGE_LAYOUTS };";
@@ -117,9 +117,10 @@ export async function loadScript({ httpImpl, cacheDir, config = {}, test = true,
       constructor() { this.actions = []; }
       addAction(t) { this.actions.push(t); }
       addDestructiveAction(t) { this.actions.push(t); }
-      addCancelAction() {}
+      addCancelAction(t) { this.cancel = t; }
+      async presentAlert() { this.style = "alert"; return this.presentSheet(); }
       async presentSheet() {
-        state.alerts.push({ title: this.title, message: this.message, actions: this.actions });
+        state.alerts.push({ title: this.title, message: this.message, actions: this.actions, cancel: this.cancel, style: this.style || "sheet" });
         const c = alertChoices.length ? alertChoices.shift() : -1;
         return typeof c === "string" ? this.actions.indexOf(c) : c;
       }
@@ -137,6 +138,7 @@ export async function loadScript({ httpImpl, cacheDir, config = {}, test = true,
     {
       screenResolution: () => ({ width: device.width || 1179, height: device.height || 2556 }),
       isUsingDarkAppearance: () => !!device.dark,
+      isPad: () => !!device.pad,
     },
     { save: (image) => { if (device.photosFail) throw new Error("denied"); state.saved.push(image); } },
     { fromData: (data) => ({ image: data }) },

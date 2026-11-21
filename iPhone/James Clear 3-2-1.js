@@ -17,8 +17,9 @@
  * Tapping the widget (or running the script inside Scriptable) shows a menu:
  * another idea, open the issue on jamesclear.com, save the idea as a picture
  * (centered, or placed for the Lock Screen), copy, preview, reset.
- * After "Another idea" the widget shows the new idea at its next refresh
- * (within about an hour); the next day starts fresh.
+ * After "Another idea", tap Done: the script ends and Scriptable refreshes the
+ * widget right away (otherwise it updates within about an hour). The next day
+ * starts fresh.
  *
  * Personal use only. All ideas are by James Clear and are loaded from his site.
  */
@@ -787,7 +788,7 @@ async function presentInApp(engine, family) {
     const a = new Alert();
     a.title = notice ? notice.title : quote ? `Today's idea (${prettyDate(quote.issue.date)})` : "James Clear 3-2-1";
     a.message = quote ? quote.text : "Couldn't load an idea. Check your connection and try again.";
-    if (quote && shuffled) a.message += "\n\nThe widget shows this idea at its next refresh.";
+    if (quote && shuffled) a.message += "\n\nTap Done to show this idea in the widget.";
     if (notice && notice.note) a.message += `\n\n${notice.note}`;
     notice = null;
     // Each action returns true to show the menu again.
@@ -810,7 +811,9 @@ async function presentInApp(engine, family) {
     add("Preview large", async () => { await buildWidget(await fresh("large"), "large").presentLarge(); });
     add("Reset cache", () => { engine.store.clear(); }, true);
     a.addCancelAction("Done");
-    const run = actions[await a.presentSheet()];
+    // On iPad a sheet becomes a popover, which iOS shows without its "Done" button; an alert keeps it,
+    // and "Done" ends the script, after which Scriptable refreshes the widget right away.
+    const run = actions[await (Device.isPad() ? a.presentAlert() : a.presentSheet())];
     if (run && (await run())) continue;
     return;
   }
